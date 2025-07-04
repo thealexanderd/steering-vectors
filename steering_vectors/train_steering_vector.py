@@ -13,6 +13,7 @@ from steering_vectors.utils import batchify
 from .layer_matching import LayerType, ModelLayerConfig, guess_and_enhance_layer_config
 from .record_activations import record_activations
 from .steering_vector import SteeringVector
+from .steering_vector_field import SteeringVectorField
 
 
 @dataclass
@@ -261,3 +262,46 @@ def _get_token_index(
             return default_idx(prompt)
     else:
         return custom_idx
+
+@torch.no_grad()
+def train_steering_vector_field(
+    model: nn.Module,
+    tokenizer: PreTrainedTokenizerBase,
+    training_samples: Sequence[SteeringVectorTrainingSample | tuple[str, str]],
+    layers: list[int] | None = None,
+    layer_type: LayerType = "decoder_block",
+    layer_config: ModelLayerConfig | None = None,
+    move_to_cpu: bool = False,
+    read_token_index: int | Callable[[str], int] = -1,
+    show_progress: bool = False,
+    batch_size: int = 1,
+    tqdm_desc: str = "Training steering vector field",
+) -> SteeringVectorField:
+    """
+    Train a steering vector field for the given model.
+
+    This keeps all (pos, neg) activation pairs instead of aggregating them into one vector.
+    """
+    pos_acts_by_layer, neg_acts_by_layer = extract_activations(
+        model,
+        tokenizer,
+        training_samples,
+        layers=layers,
+        layer_type=layer_type,
+        layer_config=layer_config,
+        move_to_cpu=move_to_cpu,
+        read_token_index=read_token_index,
+        show_progress=show_progress,
+        batch_size=batch_size,
+        tqdm_desc=tqdm_desc,
+    )
+
+    field_activations: dict[int, list[tuple[Tensor, Tensor]]] = {}
+    for layer_num in pos_acts_by_layer.keys():
+        pos_acts = torch.cat(pos_acts_by_layer[layer_num], dim=0)
+        neg_acts = torch.cat(neg_acts_by_layer[layer_num], dim=0)
+        assert pos_acts.shape == neg_acts.shape
+        # field_activations[layer_num] = [(p, n) for p, n in zip(pos_acts, neg_acts)]
+        field_activations[layer_num] = [(n, p - n) for p, n in zip(pos_acts, neg_acts)]
+
+    return SteeringVectorField(layer_activations=field_activations, layer_type=layer_type)

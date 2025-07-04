@@ -25,6 +25,7 @@ from .train_steering_vector import (
     aggregate_activations,
     extract_activations,
     train_steering_vector,
+    train_steering_vector_field,
 )
 
 __all__ = [
@@ -40,8 +41,10 @@ __all__ = [
     "PatchDeltaOperator",
     "record_activations",
     "SteeringVector",
+    "SteeringVectorField",
     "SteeringPatchHandle",
     "train_steering_vector",
+    "train_steering_vector_field",
     "SteeringVectorTrainingSample",
     "aggregate_activations",
     "extract_activations",
